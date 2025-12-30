@@ -232,6 +232,7 @@ class LoadCombinationGenerator:
         load_case_groups = {}
         current_load = start_load
 
+        # Build load cases and groups. store (col_index, load_num, case_name) in groups
         for col in range(self.cols - 1):
             base_name = self.name_entries[col].get().strip()
             ltype = self.type_combos[col].get().strip()
@@ -244,8 +245,10 @@ class LoadCombinationGenerator:
                 group = []
                 for i in range(1, subcases + 1):
                     case_name = f"{base_name}{i}"
-                    load_cases.append(f"LOAD {current_load} LOADTYPE {ltype} TITLE {case_name}")
-                    group.append((current_load, case_name))
+                    # Display title: omit trailing '1' when there's only one subcase
+                    display_title = case_name if subcases > 1 else re.sub(r"\d+$", "", case_name)
+                    load_cases.append(f"LOAD {current_load} LOADTYPE {ltype} TITLE {display_title}")
+                    group.append((col, current_load, case_name))
                     current_load += 1
                 load_case_groups[col] = group
 
@@ -268,20 +271,27 @@ class LoadCombinationGenerator:
             subcase_options = []
             for col in active_cols:
                 if col in load_case_groups:
+                    # each item: (col, load_num, case_name)
                     subcase_options.append(load_case_groups[col])
                 else:
                     base_name = self.name_entries[col].get().strip()
-                    subcase_options.append([(0, f"{base_name}1")])
+                    subcase_options.append([(col, 0, f"{base_name}1")])
 
             for permutation in product(*subcase_options):
                 expr_parts = []
                 factor_parts = []
                 # coeffs for active columns in same order
                 coeffs_for_active = [coeffs[col] for col in active_cols]
-                for (load_num, case_name), coeff in zip(permutation, coeffs_for_active):
+                for (item, coeff) in zip(permutation, coeffs_for_active):
+                    col_idx, load_num, case_name = item
                     sign = "+" if coeff >= 0 else "-"
                     abs_coeff = abs(coeff)
-                    display_name = self._display_case_name(case_name)
+                    # If the column has more than one subcase, keep the numeric suffix.
+                    # Otherwise strip trailing digits (so "live1" -> "live").
+                    if col_idx in load_case_groups and len(load_case_groups[col_idx]) > 1:
+                        display_name = case_name
+                    else:
+                        display_name = re.sub(r"\d+$", "", case_name)
                     expr_parts.append(f"{sign} {abs_coeff} {display_name}")
                     factor_parts.append(f"{load_num} {coeff}")
 
