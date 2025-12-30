@@ -1,3 +1,4 @@
+import re
 import tkinter as tk
 from tkinter import ttk, messagebox
 from itertools import product
@@ -10,6 +11,21 @@ class LoadCombinationGenerator:
 
         self.create_widgets()
         self.setup_key_navigation()
+
+    def _display_case_name(self, case_name: str) -> str:
+        """
+        Return a display-friendly case name: strip the trailing '1' suffix for display only.
+        Examples:
+            'wind1' -> 'wind'
+            'dead2' -> 'dead2'
+            'live'  -> 'live'
+        """
+        m = re.match(r"^(.*?)(\d+)$", case_name)
+        if m:
+            base, num = m.group(1), m.group(2)
+            return base if num == "1" else f"{base}{num}"
+        return case_name
+
     def create_widgets(self):
         main_frame = ttk.Frame(self.root)
         main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
@@ -63,6 +79,8 @@ class LoadCombinationGenerator:
             combo.current(0)
             combo.grid(row=2, column=col, padx=5, pady=5, sticky='nsew')
             self.type_combos.append(combo)
+            self.grid_positions[combo] = (2, col)
+            self.all_entries.append(combo)
 
         self.coeff_entries = []
         for row in range(3, self.rows - 1):
@@ -77,10 +95,10 @@ class LoadCombinationGenerator:
                 self.grid_positions[entry] = (row, col)
             self.coeff_entries.append(row_entries)
 
-        ttk.Label(self.scrollable_frame,text="Subcase").grid(row=self.rows - 1, column=0, padx=5, pady=5, sticky='nsew')
+        ttk.Label(self.scrollable_frame, text="Subcase").grid(row=self.rows - 1, column=0, padx=5, pady=5, sticky='nsew')
         self.subcase_entries = []
         for col in range(1, self.cols):
-            entry = tk.Entry(self.scrollable_frame,width=15,bg="light green",)
+            entry = tk.Entry(self.scrollable_frame, width=15, bg="light green")
             entry.grid(row=self.rows - 1, column=col, padx=5, pady=5, sticky='nsew')
             self.subcase_entries.append(entry)
             self.all_entries.append(entry)
@@ -100,12 +118,14 @@ class LoadCombinationGenerator:
         self.start_load_entry.insert(0, "1")
         self.start_load_entry.pack(side=tk.LEFT, padx=2)
         self.all_entries.append(self.start_load_entry)
+        self.grid_positions[self.start_load_entry] = (self.rows, 1)
 
         ttk.Label(control_row1, text="Start Combination:").pack(side=tk.LEFT, padx=2)
         self.start_comb_entry = ttk.Entry(control_row1, width=8)
         self.start_comb_entry.insert(0, "101")
         self.start_comb_entry.pack(side=tk.LEFT, padx=2)
         self.all_entries.append(self.start_comb_entry)
+        self.grid_positions[self.start_comb_entry] = (self.rows, 2)
 
         stats_frame = ttk.Frame(control_row1)
         stats_frame.pack(side=tk.LEFT, padx=10)
@@ -121,14 +141,16 @@ class LoadCombinationGenerator:
         control_row2 = ttk.Frame(control_frame)
         control_row2.pack(fill=tk.X, pady=(5, 0))
 
-        self.generate_btn = ttk.Button(control_row2,text="Generate",command=self.generate,padding=(20, 5))
+        self.generate_btn = ttk.Button(control_row2, text="Generate", command=self.generate, padding=(20, 5))
         self.generate_btn.pack(side=tk.LEFT, padx=10)
+        self.grid_positions[self.generate_btn] = (self.rows, 3)
 
-        self.clear_btn = ttk.Button(control_row2,text="Clear",command=self.clear_all,padding=(20, 5))
+        self.clear_btn = ttk.Button(control_row2, text="Clear", command=self.clear_all, padding=(20, 5))
         self.clear_btn.pack(side=tk.LEFT, padx=10)
+        self.grid_positions[self.clear_btn] = (self.rows, 4)
 
     def setup_key_navigation(self):
-        for widget in self.all_entries:
+        for widget in list(self.all_entries):
             if widget in self.grid_positions:
                 row, col = self.grid_positions[widget]
 
@@ -137,17 +159,24 @@ class LoadCombinationGenerator:
                 widget.bind('<Left>', lambda e, r=row, c=col: self.focus_adjacent_widget(r, c - 1))
                 widget.bind('<Right>', lambda e, r=row, c=col: self.focus_adjacent_widget(r, c + 1))
 
-        self.start_comb_entry.bind('<Down>', lambda e: self.generate_btn.focus_set())
-        self.generate_btn.bind('<Up>', lambda e: self.start_comb_entry.focus_set())
-        self.generate_btn.bind('<Right>', lambda e: self.clear_btn.focus_set())
-        self.generate_btn.bind('<Left>', lambda e: self.start_comb_entry.focus_set())
-        self.clear_btn.bind('<Right>', lambda e: None)
-        self.clear_btn.bind('<Left>', lambda e: self.generate_btn.focus_set())
+        # navigation for control buttons/entries
+        try:
+            self.start_comb_entry.bind('<Down>', lambda e: self.generate_btn.focus_set())
+            self.generate_btn.bind('<Up>', lambda e: self.start_comb_entry.focus_set())
+            self.generate_btn.bind('<Right>', lambda e: self.clear_btn.focus_set())
+            self.generate_btn.bind('<Left>', lambda e: self.start_comb_entry.focus_set())
+            self.clear_btn.bind('<Right>', lambda e: None)
+            self.clear_btn.bind('<Left>', lambda e: self.generate_btn.focus_set())
+        except Exception:
+            pass
 
     def focus_adjacent_widget(self, row, col):
         for widget, (r, c) in self.grid_positions.items():
             if r == row and c == col:
-                widget.focus_set()
+                try:
+                    widget.focus_set()
+                except Exception:
+                    pass
                 return
 
         min_distance = float('inf')
@@ -160,7 +189,10 @@ class LoadCombinationGenerator:
                 nearest_widget = widget
 
         if nearest_widget:
-            nearest_widget.focus_set()
+            try:
+                nearest_widget.focus_set()
+            except Exception:
+                pass
 
     def clear_all(self):
         for entry in self.name_entries:
@@ -230,8 +262,10 @@ class LoadCombinationGenerator:
                 coeffs.append(coeff)
 
             active_cols = [col for col, coeff in enumerate(coeffs) if coeff != 0]
-            subcase_options = []
+            if not active_cols:
+                continue
 
+            subcase_options = []
             for col in active_cols:
                 if col in load_case_groups:
                     subcase_options.append(load_case_groups[col])
@@ -242,10 +276,13 @@ class LoadCombinationGenerator:
             for permutation in product(*subcase_options):
                 expr_parts = []
                 factor_parts = []
-                for (load_num, case_name), coeff in zip(permutation, [coeffs[col] for col in active_cols]):
+                # coeffs for active columns in same order
+                coeffs_for_active = [coeffs[col] for col in active_cols]
+                for (load_num, case_name), coeff in zip(permutation, coeffs_for_active):
                     sign = "+" if coeff >= 0 else "-"
                     abs_coeff = abs(coeff)
-                    expr_parts.append(f"{sign} {abs_coeff} {case_name}")
+                    display_name = self._display_case_name(case_name)
+                    expr_parts.append(f"{sign} {abs_coeff} {display_name}")
                     factor_parts.append(f"{load_num} {coeff}")
 
                 if expr_parts:
